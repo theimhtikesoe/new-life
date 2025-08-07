@@ -139,7 +139,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
         setTimeout(() => {
           const addedCardType = cardTypes.find(ct => ct.quantity === quantity && ct.label === newCardType.label.trim())
           if (addedCardType) {
-            setSelectedCardTypes([...selectedCardTypes, addedCardType.id])
+            setSelectedCardTypes(prev => [...prev, addedCardType.id])
           }
         }, 100)
 
@@ -183,7 +183,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
 
     try {
       // Remove from selected if it was selected
-      setSelectedCardTypes(selectedCardTypes.filter(id => id !== cardType.id))
+      setSelectedCardTypes(prev => prev.filter(id => id !== cardType.id))
       
       await deleteCardType(cardType.id)
       toast({
@@ -205,6 +205,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
     setEditingCardType(null)
   }
 
+  // Initialize form data when dialog opens or product changes
   useEffect(() => {
     if (product) {
       setFormData({
@@ -232,11 +233,29 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
       setSelectedCardTypes([])
     }
     
-    // Reset add card type form when dialog opens/closes
-    setShowAddCardType(false)
-    setNewCardType({ quantity: "", label: "" })
-    setEditingCardType(null)
-  }, [product, open, categories, cardTypes])
+    // Only reset add card type form when dialog opens/closes, not when cardTypes change
+    if (!open) {
+      setShowAddCardType(false)
+      setNewCardType({ quantity: "", label: "" })
+      setEditingCardType(null)
+    }
+  }, [product, open, categories])
+
+  // Separate effect for handling cardTypes changes without resetting form
+  useEffect(() => {
+    // Update selected card types if they exist in the new cardTypes list
+    if (product && cardTypes.length > 0) {
+      const updatedSelectedCardTypes = product.variants?.map(variant => {
+        const cardType = cardTypes.find(ct => ct.label === variant.cardType)
+        return cardType?.id
+      }).filter(Boolean) || []
+      
+      // Only update if different to avoid unnecessary re-renders
+      if (JSON.stringify(updatedSelectedCardTypes) !== JSON.stringify(selectedCardTypes)) {
+        setSelectedCardTypes(updatedSelectedCardTypes)
+      }
+    }
+  }, [cardTypes])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -514,9 +533,9 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
                           checked={selectedCardTypes.includes(cardType.id)}
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setSelectedCardTypes([...selectedCardTypes, cardType.id])
+                              setSelectedCardTypes(prev => [...prev, cardType.id])
                             } else {
-                              setSelectedCardTypes(selectedCardTypes.filter(ct => ct !== cardType.id))
+                              setSelectedCardTypes(prev => prev.filter(ct => ct !== cardType.id))
                             }
                           }}
                           className="shrink-0"
