@@ -57,9 +57,14 @@ interface POSStore {
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>
   deleteProduct: (id: string) => Promise<void>
   
+  // Stock tracking methods
+  updateStock: (productId: string, quantity: number) => Promise<void>
+  checkStockAvailability: (productId: string, variantId: string, requestedQuantity: number) => boolean
+  
   // Order methods
   fetchOrders: () => Promise<void>
   checkout: (customerName: string) => Promise<void>
+  deleteOrder: (orderId: string) => Promise<void>
   
   // Cart methods (local only)
   addToCart: (product: Product, variant: ProductVariant) => void
@@ -193,6 +198,44 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     }
   },
 
+  // Stock tracking methods
+  updateStock: async (productId, quantity) => {
+    try {
+      const supabase = getSupabaseClient()
+      const { error } = await supabase
+        .from('products')
+        .update({ stock: quantity })
+        .eq('id', productId)
+
+      if (error) throw error
+
+      // If not using real Supabase, manually update the store
+      if (!hasSupabaseCredentials) {
+        set(state => ({
+          products: state.products.map(p => 
+            p.id === productId ? { ...p, stock: quantity } : p
+          )
+        }))
+      }
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
+  checkStockAvailability: (productId, variantId, requestedQuantity) => {
+    const { products } = get()
+    const product = products.find(p => p.id === productId)
+    if (!product) return false
+    
+    const variant = product.variants.find(v => v.id === variantId)
+    if (!variant) return false
+    
+    // Calculate total bottles needed
+    const totalBottlesNeeded = requestedQuantity * variant.quantity
+    return product.stock >= totalBottlesNeeded
+  },
+
   fetchOrders: async () => {
     set({ loading: true, error: null })
     try {
@@ -221,8 +264,16 @@ export const usePOSStore = create<POSStore>((set, get) => ({
 
   checkout: async (customerName) => {
     try {
-      const { cart } = get()
+      const { cart, products } = get()
       const total = get().getCartTotal()
+      
+      // Check stock availability for all items
+      for (const item of cart) {
+        const isAvailable = get().checkStockAvailability(item.productId, item.variantId, item.quantity)
+        if (!isAvailable) {
+          throw new Error(`Insufficient stock for ${item.name}`)
+        }
+      }
       
       const orderData = {
         items: cart,
@@ -240,6 +291,15 @@ export const usePOSStore = create<POSStore>((set, get) => ({
         .single()
 
       if (error) throw error
+
+      // Update stock for each item
+      for (const item of cart) {
+        const product = products.find(p => p.id === item.productId)
+        if (product) {
+          const newStock = product.stock - (item.quantity * item.bottlesPerCard)
+          await get().updateStock(item.productId, Math.max(0, newStock))
+        }
+      }
 
       // If not using real Supabase, manually update the store
       if (!hasSupabaseCredentials) {
@@ -264,11 +324,41 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     }
   },
 
+  deleteOrder: async (orderId) => {
+    try {
+      const supabase = getSupabaseClient()
+      const { error } = await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderId)
+
+      if (error) throw error
+
+      // If not using real Supabase, manually update the store
+      if (!hasSupabaseCredentials) {
+        set(state => ({
+          orders: state.orders.filter(o => o.id !== orderId)
+        }))
+      }
+    } catch (error) {
+      set({ error: (error as Error).message })
+      throw error
+    }
+  },
+
   // Cart methods (local only - no need to sync cart across users)
   addToCart: (product, variant) =>
     set((state) => {
       const cartItemId = `${product.id}-${variant.id}`
       const existingItem = state.cart.find((item) => item.id === cartItemId)
+      
+      // Check stock availability
+      const requestedQuantity = existingItem ? existingItem.quantity + 1 : 1
+      const isAvailable = get().checkStockAvailability(product.id, variant.id, requestedQuantity)
+      
+      if (!isAvailable) {
+        throw new Error(`Insufficient stock for ${product.name}`)
+      }
       
       if (existingItem) {
         return {
@@ -307,6 +397,12 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     set((state) => {
       const item = state.cart.find((i) => i.id === cartItemId)
       if (item) {
+        // Check stock availability
+        const isAvailable = get().checkStockAvailability(item.productId, item.variantId, quantity)
+        if (!isAvailable) {
+          throw new Error(`Insufficient stock for ${item.name}`)
+        }
+        
         return {
           cart: state.cart.map((i) =>
             i.id === cartItemId
