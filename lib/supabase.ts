@@ -1,0 +1,287 @@
+import { createClient } from '@supabase/supabase-js'
+
+// Fallback values for development
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
+
+// Check if we have real Supabase credentials
+export const hasSupabaseCredentials = 
+  process.env.NEXT_PUBLIC_SUPABASE_URL && 
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY &&
+  process.env.NEXT_PUBLIC_SUPABASE_URL !== 'https://placeholder.supabase.co'
+
+export const supabase = hasSupabaseCredentials 
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      realtime: {
+        params: {
+          eventsPerSecond: 10,
+        },
+      },
+    })
+  : null
+
+// Mock Supabase client for development
+export const mockSupabase = {
+  from: (table: string) => ({
+    select: (columns?: string) => ({
+      order: (column: string, options?: any) => ({
+        then: (callback: (result: any) => void) => {
+          // Return mock data based on table
+          const mockData = getMockData(table)
+          callback({ data: mockData, error: null })
+          return Promise.resolve({ data: mockData, error: null })
+        }
+      }),
+      single: () => ({
+        then: (callback: (result: any) => void) => {
+          const mockData = getMockData(table)[0] || null
+          callback({ data: mockData, error: null })
+          return Promise.resolve({ data: mockData, error: null })
+        }
+      })
+    }),
+    insert: (data: any) => ({
+      select: () => ({
+        single: () => ({
+          then: (callback: (result: any) => void) => {
+            const newItem = { ...data, id: Date.now().toString(), created_at: new Date().toISOString() }
+            callback({ data: newItem, error: null })
+            return Promise.resolve({ data: newItem, error: null })
+          }
+        })
+      })
+    }),
+    update: (data: any) => ({
+      eq: (column: string, value: any) => ({
+        then: (callback: (result: any) => void) => {
+          callback({ data: null, error: null })
+          return Promise.resolve({ data: null, error: null })
+        }
+      })
+    }),
+    delete: () => ({
+      eq: (column: string, value: any) => ({
+        then: (callback: (result: any) => void) => {
+          callback({ data: null, error: null })
+          return Promise.resolve({ data: null, error: null })
+        }
+      })
+    })
+  }),
+  channel: (name: string) => ({
+    on: (event: string, options: any, callback: any) => ({
+      subscribe: () => ({})
+    })
+  }),
+  removeChannel: (channel: any) => {}
+}
+
+// Get the appropriate client
+export const getSupabaseClient = () => {
+  return hasSupabaseCredentials ? supabase : mockSupabase
+}
+
+// Mock data for development
+function getMockData(table: string) {
+  switch (table) {
+    case 'categories':
+      return [
+        { id: 'small', name: 'Small', description: 'Small sized water bottles', is_default: true, created_at: '2024-01-01T00:00:00Z' },
+        { id: 'medium', name: 'Medium', description: 'Medium sized water bottles', is_default: true, created_at: '2024-01-01T00:00:00Z' },
+        { id: 'large', name: 'Large', description: 'Large sized water bottles', is_default: true, created_at: '2024-01-01T00:00:00Z' }
+      ]
+    case 'card_types':
+      return [
+        { id: '100', label: '100-pack', quantity: 100, is_default: true, created_at: '2024-01-01T00:00:00Z' },
+        { id: '200', label: '200-pack', quantity: 200, is_default: true, created_at: '2024-01-01T00:00:00Z' },
+        { id: '400', label: '400-pack', quantity: 400, is_default: true, created_at: '2024-01-01T00:00:00Z' },
+        { id: '500', label: '500-pack', quantity: 500, is_default: true, created_at: '2024-01-01T00:00:00Z' }
+      ]
+    case 'products':
+      return [
+        {
+          id: '1',
+          name: 'Purified Water',
+          bottle_size: '300ml',
+          bottle_price: 200,
+          category: 'Small',
+          stock: 50,
+          variants: [
+            { id: '1-100', cardType: '100-pack', quantity: 100, totalPrice: 20000 },
+            { id: '1-200', cardType: '200-pack', quantity: 200, totalPrice: 40000 },
+            { id: '1-400', cardType: '400-pack', quantity: 400, totalPrice: 80000 }
+          ],
+          image: null,
+          created_at: '2024-01-01T00:00:00Z'
+        },
+        {
+          id: '2',
+          name: 'Premium Water',
+          bottle_size: '600ml',
+          bottle_price: 300,
+          category: 'Medium',
+          stock: 30,
+          variants: [
+            { id: '2-100', cardType: '100-pack', quantity: 100, totalPrice: 30000 },
+            { id: '2-200', cardType: '200-pack', quantity: 200, totalPrice: 60000 },
+            { id: '2-400', cardType: '400-pack', quantity: 400, totalPrice: 120000 }
+          ],
+          image: null,
+          created_at: '2024-01-01T00:00:00Z'
+        }
+      ]
+    case 'orders':
+      return [
+        {
+          id: '1',
+          items: [
+            {
+              id: '1-100',
+              productId: '1',
+              variantId: '1-100',
+              name: 'Purified Water - 300ml',
+              bottleSize: '300ml',
+              cardType: '100-pack',
+              quantity: 2,
+              bottlesPerCard: 100,
+              pricePerCard: 20000,
+              totalPrice: 40000
+            }
+          ],
+          total: 40000,
+          customer_name: 'John Doe',
+          date: '2024-01-01T10:00:00Z',
+          status: 'completed',
+          created_at: '2024-01-01T10:00:00Z'
+        }
+      ]
+    default:
+      return []
+  }
+}
+
+// Database types
+export interface Database {
+  public: {
+    Tables: {
+      products: {
+        Row: {
+          id: string
+          name: string
+          bottle_size: string
+          bottle_price: number
+          category: string
+          stock: number
+          variants: any[]
+          image: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          bottle_size: string
+          bottle_price: number
+          category: string
+          stock: number
+          variants: any[]
+          image?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          bottle_size?: string
+          bottle_price?: number
+          category?: string
+          stock?: number
+          variants?: any[]
+          image?: string | null
+          updated_at?: string
+        }
+      }
+      orders: {
+        Row: {
+          id: string
+          items: any[]
+          total: number
+          customer_name: string
+          date: string
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          items: any[]
+          total: number
+          customer_name: string
+          date: string
+          status: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          items?: any[]
+          total?: number
+          customer_name?: string
+          date?: string
+          status?: string
+          updated_at?: string
+        }
+      }
+      categories: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          is_default: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          is_default?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          is_default?: boolean
+          updated_at?: string
+        }
+      }
+      card_types: {
+        Row: {
+          id: string
+          label: string
+          quantity: number
+          is_default: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          label: string
+          quantity: number
+          is_default?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          label?: string
+          quantity?: number
+          is_default?: boolean
+          updated_at?: string
+        }
+      }
+    }
+  }
+}
