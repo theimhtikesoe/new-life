@@ -71,6 +71,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
     return selectedCardTypes.map(cardTypeId => {
       const cardType = cardTypes.find(ct => ct.id === cardTypeId)
       return {
+        id: `${Date.now()}-${cardTypeId}`,
         cardType: cardType?.label || '',
         quantity: cardType?.quantity || 0,
         totalPrice: bottlePrice * (cardType?.quantity || 0)
@@ -126,11 +127,13 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
         })
       } else {
         // Add new card type
-        await addCardType({
+        const newCardTypeData = {
           quantity,
           label: newCardType.label.trim(),
           isDefault: false,
-        })
+        }
+        
+        await addCardType(newCardTypeData)
 
         // Find the newly added card type and select it
         setTimeout(() => {
@@ -238,18 +241,45 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!formData.name || !formData.bottlePrice || !formData.stock || selectedCardTypes.length === 0) {
+    if (!formData.name.trim()) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all fields and select at least one card type",
+        description: "Product name is required",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!formData.bottlePrice || parseFloat(formData.bottlePrice) <= 0) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a valid bottle price",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!formData.stock || parseInt(formData.stock) < 0) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a valid stock quantity",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (selectedCardTypes.length === 0) {
+      toast({
+        title: "Validation Error",
+        description: "Please select at least one card type",
         variant: "destructive"
       })
       return
     }
 
     const productData = {
-      name: formData.name,
-      bottleSize: formData.bottleSize,
+      name: formData.name.trim(),
+      bottleSize: formData.bottleSize.trim(),
       bottlePrice: parseFloat(formData.bottlePrice),
       category: formData.category,
       stock: parseInt(formData.stock),
@@ -298,7 +328,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="name" className="text-right">
-                Name
+                Name *
               </Label>
               <Input
                 id="name"
@@ -307,6 +337,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
                 className="col-span-3"
                 placeholder="Enter product name"
                 disabled={loading}
+                required
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -324,7 +355,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="bottlePrice" className="text-right">
-                Price per Bottle (MMK)
+                Price per Bottle (MMK) *
               </Label>
               <Input
                 id="bottlePrice"
@@ -334,16 +365,20 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
                 onChange={(e) => setFormData({ ...formData, bottlePrice: e.target.value })}
                 className="col-span-3"
                 disabled={loading}
+                min="0"
+                step="0.01"
+                required
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="category" className="text-right">
-                Category
+                Category *
               </Label>
               <Select
                 value={formData.category}
                 onValueChange={(value) => setFormData({ ...formData, category: value })}
                 disabled={loading}
+                required
               >
                 <SelectTrigger className="col-span-3">
                   <SelectValue placeholder="Select category" />
@@ -359,7 +394,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="stock" className="text-right">
-                Stock
+                Stock *
               </Label>
               <Input
                 id="stock"
@@ -369,12 +404,14 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
                 className="col-span-3"
                 placeholder="Enter stock quantity"
                 disabled={loading}
+                min="0"
+                required
               />
             </div>
             
             {/* Card Types Selection */}
             <div className="grid grid-cols-4 items-start gap-4">
-              <Label className="text-right pt-2">Card Types</Label>
+              <Label className="text-right pt-2">Card Types *</Label>
               <div className="col-span-3 space-y-3">
                 {/* Add New Card Type Section */}
                 {!showAddCardType ? (
@@ -417,6 +454,7 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
                           onChange={(e) => setNewCardType({ ...newCardType, quantity: e.target.value })}
                           className="h-8"
                           disabled={loading}
+                          min="1"
                         />
                       </div>
                       <div>
@@ -463,80 +501,86 @@ export function ProductDialog({ open, onOpenChange, product }: ProductDialogProp
                 {/* Existing Card Types */}
                 <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-2">
                   <Label className="text-xs text-muted-foreground">Select from existing card types:</Label>
-                  {cardTypes.map(cardType => (
-                    <div key={cardType.id} className="flex items-center space-x-2 group">
-                      <input
-                        type="checkbox"
-                        id={cardType.id}
-                        checked={selectedCardTypes.includes(cardType.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedCardTypes([...selectedCardTypes, cardType.id])
-                          } else {
-                            setSelectedCardTypes(selectedCardTypes.filter(ct => ct !== cardType.id))
-                          }
-                        }}
-                        className="shrink-0"
-                        disabled={loading}
-                      />
-                      <label htmlFor={cardType.id} className="flex-1 text-sm cursor-pointer">
-                        {cardType.label} ({cardType.quantity} bottles)
-                        {!cardType.isDefault && (
-                          <span className="ml-2 text-xs text-blue-600">(Custom)</span>
-                        )}
-                      </label>
-                      
-                      {/* Edit and Delete buttons */}
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditCardType(cardType)}
-                          className="h-6 w-6 p-0"
-                          title="Edit card type"
+                  {cardTypes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No card types available. Add one above.
+                    </p>
+                  ) : (
+                    cardTypes.map(cardType => (
+                      <div key={cardType.id} className="flex items-center space-x-2 group">
+                        <input
+                          type="checkbox"
+                          id={cardType.id}
+                          checked={selectedCardTypes.includes(cardType.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedCardTypes([...selectedCardTypes, cardType.id])
+                            } else {
+                              setSelectedCardTypes(selectedCardTypes.filter(ct => ct !== cardType.id))
+                            }
+                          }}
+                          className="shrink-0"
                           disabled={loading}
-                        >
-                          <Edit className="h-3 w-3" />
-                        </Button>
+                        />
+                        <label htmlFor={cardType.id} className="flex-1 text-sm cursor-pointer">
+                          {cardType.label} ({cardType.quantity} bottles)
+                          {!cardType.isDefault && (
+                            <span className="ml-2 text-xs text-blue-600">(Custom)</span>
+                          )}
+                        </label>
                         
-                        {!cardType.isDefault && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-                                title="Delete card type"
-                                disabled={loading}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Card Type</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Are you sure you want to delete "{cardType.label}"? This action cannot be undone.
-                                  Products using this card type will need to be updated.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDeleteCardType(cardType)}
-                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        {/* Edit and Delete buttons */}
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditCardType(cardType)}
+                            className="h-6 w-6 p-0"
+                            title="Edit card type"
+                            disabled={loading}
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          
+                          {!cardType.isDefault && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                  title="Delete card type"
+                                  disabled={loading}
                                 >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Card Type</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete "{cardType.label}"? This action cannot be undone.
+                                    Products using this card type will need to be updated.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeleteCardType(cardType)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             </div>

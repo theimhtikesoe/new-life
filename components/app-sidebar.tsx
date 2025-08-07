@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { BarChart3, Home, Package, ShoppingCart, Users, FileText, Settings, Store, Globe } from 'lucide-react'
+import { BarChart3, Home, Package, ShoppingCart, Users, FileText, Settings, Store, Globe, LogOut } from 'lucide-react'
 
 import {
   Sidebar,
@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useUserRole } from "@/hooks/use-user-role"
+import { useAdminAuth } from "@/hooks/use-admin-auth"
 
 const navigation = [
   {
@@ -70,10 +71,21 @@ const navigation = [
 export function AppSidebar() {
   const pathname = usePathname()
   const { role, setRole } = useUserRole()
+  const { isAuthenticated, logout } = useAdminAuth()
 
   const filteredNavigation = navigation.filter(item => 
     item.roles.includes(role)
   )
+
+  const handleRoleChange = (newRole: "admin" | "cashier") => {
+    if (newRole !== role) {
+      // Logout admin when switching roles
+      if (isAuthenticated) {
+        logout()
+      }
+      setRole(newRole)
+    }
+  }
 
   return (
     <Sidebar collapsible="icon" className="border-r">
@@ -124,18 +136,28 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <div className="flex flex-col gap-2 p-2">
+            <div className="flex flex-col gap-3 p-2">
+              {/* Role and Auth Status */}
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Role:</span>
-                <Badge variant="outline" className="text-xs">
-                  {role}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    {role}
+                  </Badge>
+                  {role === "admin" && isAuthenticated && (
+                    <Badge variant="outline" className="text-xs text-green-600">
+                      ✓
+                    </Badge>
+                  )}
+                </div>
               </div>
+              
+              {/* Role Switcher */}
               <div className="flex gap-1">
                 <Button
                   size="sm"
                   variant={role === "admin" ? "default" : "outline"}
-                  onClick={() => setRole("admin")}
+                  onClick={() => handleRoleChange("admin")}
                   className="flex-1 text-xs"
                 >
                   Admin
@@ -143,12 +165,27 @@ export function AppSidebar() {
                 <Button
                   size="sm"
                   variant={role === "cashier" ? "default" : "outline"}
-                  onClick={() => setRole("cashier")}
+                  onClick={() => handleRoleChange("cashier")}
                   className="flex-1 text-xs"
                 >
                   Cashier
                 </Button>
               </div>
+
+              {/* Admin Logout */}
+              {role === "admin" && isAuthenticated && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={logout}
+                  className="w-full justify-start text-xs text-red-600 hover:text-red-700"
+                >
+                  <LogOut className="mr-2 h-3 w-3" />
+                  Logout Admin
+                </Button>
+              )}
+              
+              {/* Language Toggle */}
               <Button
                 size="sm"
                 variant="ghost"

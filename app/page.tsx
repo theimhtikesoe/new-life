@@ -3,12 +3,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
-import { DollarSign, Package, ShoppingCart, TrendingUp, Users, Activity } from 'lucide-react'
+import { DollarSign, Package, ShoppingCart, TrendingUp, Users, Activity, Database } from 'lucide-react'
 import { usePOSStore } from "@/hooks/use-pos-store"
 import { SalesChart } from "@/components/sales-chart"
 import { TopProductsChart } from "@/components/top-products-chart"
 import { RecentOrders } from "@/components/recent-orders"
 import { formatMMK } from "@/utils/format"
+import { hasSupabaseCredentials } from "@/lib/supabase"
+import { Badge } from "@/components/ui/badge"
 
 export default function Dashboard() {
   const { products, orders } = usePOSStore()
@@ -34,6 +36,10 @@ export default function Dashboard() {
               <Activity className="h-4 w-4" />
               <span>Real-time sync active</span>
             </div>
+            <Badge variant={hasSupabaseCredentials ? "default" : "secondary"} className="text-xs">
+              <Database className="h-3 w-3 mr-1" />
+              {hasSupabaseCredentials ? "Cloud DB" : "Local Storage"}
+            </Badge>
           </div>
         </div>
         
@@ -46,7 +52,7 @@ export default function Dashboard() {
             <CardContent>
               <div className="text-2xl font-bold">{formatMMK(totalRevenue)}</div>
               <p className="text-xs text-muted-foreground">
-                +20.1% from last month
+                {totalOrders > 0 ? `${totalOrders} orders completed` : "No orders yet"}
               </p>
             </CardContent>
           </Card>
@@ -59,7 +65,7 @@ export default function Dashboard() {
             <CardContent>
               <div className="text-2xl font-bold">{totalProducts}</div>
               <p className="text-xs text-muted-foreground">
-                {lowStockProducts} low stock items
+                {lowStockProducts > 0 ? `${lowStockProducts} low stock items` : "All items in stock"}
               </p>
             </CardContent>
           </Card>
@@ -72,7 +78,7 @@ export default function Dashboard() {
             <CardContent>
               <div className="text-2xl font-bold">{totalOrders}</div>
               <p className="text-xs text-muted-foreground">
-                +180.1% from last month
+                {totalOrders > 0 ? `Avg: ${formatMMK(totalRevenue / totalOrders)}` : "No orders yet"}
               </p>
             </CardContent>
           </Card>
@@ -83,9 +89,9 @@ export default function Dashboard() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">+12.5%</div>
+              <div className="text-2xl font-bold">Ready</div>
               <p className="text-xs text-muted-foreground">
-                +19% from last month
+                System operational
               </p>
             </CardContent>
           </Card>
